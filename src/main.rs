@@ -20,7 +20,13 @@ impl Pos2D {
             y,
         }
     }
+
+    fn add(&mut self, pos: &Pos2D) {
+        self.x = self.x + pos.x;
+        self.y = self.y + pos.y;
+    }
 }
+
 
 trait Drawable {
     fn draw<T:RenderTarget>(&self, canvas: &mut Canvas<T>, pos:Pos2D);
@@ -136,10 +142,46 @@ impl TetrisPiece {
         }
     }
 
+    fn move_by(&mut self, pos: &Pos2D) {
+        self.pos.add(&pos);
+    }
+
     fn rotate(&mut self) {
         self.orientation = (self.orientation + 1) % 4;
     }
+
+    fn iter(&self) -> TetrisPieceIter {
+        TetrisPieceIter {
+            block_num: 0usize,
+            piece: &self,
+        }
+    }
 }
+
+struct TetrisPieceIter<'a> {
+    block_num: usize,
+    piece: &'a TetrisPiece,
+}
+
+impl<'a> Iterator for TetrisPieceIter<'a> {
+    type Item = Pos2D;
+
+    fn next(&mut self) -> Option<Pos2D> {
+        if self.block_num == 4 {
+            return None;
+        }
+        let diff = &self.piece.shape[self.piece.orientation][self.block_num];
+        let mut pos = Pos2D::xy(self.piece.pos.x, self.piece.pos.y);
+
+        pos.x = pos.x + diff.x;
+        pos.y = pos.y + diff.y;
+
+        self.block_num = self.block_num + 1;
+
+        Some(pos)
+    }
+}
+
 
 impl Drawable for TetrisPiece {
     fn draw<T:RenderTarget>(&self, canvas: &mut Canvas<T>, pos:Pos2D) {
@@ -157,9 +199,105 @@ impl Drawable for TetrisPiece {
     }
 }
 
+struct TetrisUnitBlock {
+    is_filled: bool,
+    color: Color,
+}
+
+struct TetrisBoard {
+    width: usize,
+    height: usize,
+    board: Vec<Vec<TetrisUnitBlock>>,
+    active_piece: TetrisPiece,
+}
+
+impl TetrisBoard {
+
+    fn new() -> Self {
+
+        let mut board: Vec<Vec<TetrisUnitBlock>> = Vec::new();
+        let width: usize = 12;
+        let height: usize = 24;
+
+        for i in 0usize..height {
+            board.push(Vec::new());
+            for _ in 0usize..width {
+                board[i].push(TetrisUnitBlock { is_filled: false, color: Color::RGB(0,0,0) } );
+            }
+        }
+
+        for i in 0usize..width {
+            board[0][i] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
+            board[height-1][i] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
+        }
+        for i in 0usize..height {
+            board[i][0] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
+            board[i][width-1] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
+        }
+
+        TetrisBoard {
+            width: width,
+            height: height,
+            board: board,
+            active_piece: TetrisPiece::build_stick_piece(Pos2D::xy(4, 0))
+        }
+    }
+
+    fn is_valid(&self) -> bool {
+        for pos in self.active_piece.iter() {
+            if self.board[pos.y as usize][pos.x as usize].is_filled {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn update(&mut self) {
+        self.active_piece.move_by(&Pos2D::xy(0, 1));
+
+        if !self.is_valid() {
+            self.active_piece.move_by(&Pos2D::xy(0, -1));
+        }
+
+    }
+
+}
+
+impl Drawable for TetrisUnitBlock {
+    fn draw<T:RenderTarget>(&self, canvas: &mut Canvas<T>, pos:Pos2D) {
+        let box_width = 20;
+        canvas.set_draw_color(self.color);
+        let rect = Rect::new(
+                pos.x,  
+                pos.y, 
+                box_width as u32, 
+                box_width as u32
+        );
+        canvas.fill_rect(rect);
+    }
+}
+
+impl Drawable for TetrisBoard {
+    fn draw<T:RenderTarget>(&self, canvas: &mut Canvas<T>, pos:Pos2D) {
+        let box_width: i32 = 20;
+        for i in 0usize..self.board.len() {
+            for j in 0usize..self.board[i].len() {
+                let x:i32 = (j as i32) * box_width + pos.x;
+                let y:i32 = (i as i32) * box_width + pos.y;
+                self.board[i][j].draw(canvas, Pos2D::xy(x, y))
+            }
+        }
+
+        let x = self.active_piece.pos.x * box_width + pos.x;
+        let y = self.active_piece.pos.y * box_width + pos.y;
+        self.active_piece.draw(canvas, Pos2D::xy(x,y));
+    }
+}
+
+
 fn main() {
-    let width = 200;
-    let height = 400;
+    let width = 800;
+    let height = 600;
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -173,13 +311,8 @@ fn main() {
     let mut canvas = window.into_canvas().build().unwrap();
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    let mut stick_piece = TetrisPiece::build_stick_piece(Pos2D::xy(0,0));
-    let box_piece = TetrisPiece::build_block_piece(Pos2D::xy(0,0));
-    let mut t_piece = TetrisPiece::build_t_piece(Pos2D::xy(0,0));
-    let mut s_piece = TetrisPiece::build_s_piece(Pos2D::xy(0,0));
-    let mut z_piece = TetrisPiece::build_z_piece(Pos2D::xy(0,0));
-    let mut j_piece = TetrisPiece::build_j_piece(Pos2D::xy(0,0));
-    let mut l_piece = TetrisPiece::build_l_piece(Pos2D::xy(0,0));
+    let mut tetris_board = TetrisBoard::new();
+
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -191,25 +324,15 @@ fn main() {
             }
         }
 
+        tetris_board.update();
+
         canvas.set_draw_color(Color::RGB(0,0,0));
         canvas.fill_rect(Rect::new(0,0,width,height));
 
-        stick_piece.draw(&mut canvas, Pos2D::xy(30, 50));
-        box_piece.draw(&mut canvas, Pos2D::xy(150, 100));
-        t_piece.draw(&mut canvas, Pos2D::xy(80, 100));
-        s_piece.draw(&mut canvas, Pos2D::xy(80, 180));
-        z_piece.draw(&mut canvas, Pos2D::xy(20, 180));
-        j_piece.draw(&mut canvas, Pos2D::xy(80, 320));
-        l_piece.draw(&mut canvas, Pos2D::xy(80, 240));
+        tetris_board.draw(&mut canvas, Pos2D::xy(250,50));
 
-        stick_piece.rotate();
-        t_piece.rotate();
-        s_piece.rotate();
-        z_piece.rotate();
-        j_piece.rotate();
-        l_piece.rotate();
 
         canvas.present();
-        thread::sleep(Duration::new(2, 0));
+        thread::sleep(Duration::new(1, 0));
     }
 }
