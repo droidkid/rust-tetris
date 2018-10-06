@@ -5,3 +5,4 @@ authors = ["Yuvaraj Chesetti <karch08@gmail.com>"]
 
 [dependencies]
 sdl2 = "*"
+rand = "*"

@@ -1,4 +1,6 @@
 extern crate sdl2;
+extern crate rand;
+
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -7,6 +9,8 @@ use std::thread;
 use sdl2::render::{Canvas, RenderTarget};
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
+use std::mem;
+use rand::Rng;
 
 struct Pos2D {
     x: i32,
@@ -43,7 +47,7 @@ struct TetrisPiece {
 
 
 impl TetrisPiece {
-    fn build_stick_piece(pos: Pos2D) -> Self {
+    fn build_i_piece(pos: Pos2D) -> Self {
         TetrisPiece {
             pos: pos,
             shape: [
@@ -57,7 +61,7 @@ impl TetrisPiece {
         }
     }
 
-    fn build_block_piece(pos: Pos2D) -> Self {
+    fn build_o_piece(pos: Pos2D) -> Self {
         TetrisPiece {
             pos: pos,
             shape: [
@@ -158,6 +162,30 @@ impl TetrisPiece {
     }
 }
 
+struct RandomTetrisPieceGenerator {
+}
+
+impl RandomTetrisPieceGenerator {
+
+
+    fn get_next_piece(&self, pos: Pos2D) -> TetrisPiece {
+        let mut rng = rand::thread_rng();
+        self.get_piece_for_num(rng.gen_range(0,6), pos).unwrap()
+    }
+
+    fn get_piece_for_num(&self, num: i32, pos: Pos2D) -> Option<TetrisPiece> {
+        match num {
+            0 => Some(TetrisPiece::build_i_piece(pos)),
+            1 => Some(TetrisPiece::build_o_piece(pos)),
+            2 => Some(TetrisPiece::build_s_piece(pos)),
+            3 => Some(TetrisPiece::build_z_piece(pos)),
+            4 => Some(TetrisPiece::build_j_piece(pos)),
+            5 => Some(TetrisPiece::build_l_piece(pos)),
+            _ => None
+        }
+    }
+}
+
 struct TetrisPieceIter<'a> {
     block_num: usize,
     piece: &'a TetrisPiece,
@@ -189,10 +217,10 @@ impl Drawable for TetrisPiece {
         canvas.set_draw_color(self.color);
         for diff in self.shape[self.orientation].iter() {
             let rect = Rect::new(
-                pos.x + diff.x * box_width, 
-                pos.y + diff.y * box_width, 
-                box_width as u32, 
-                box_width as u32
+                (pos.x + diff.x * box_width) + 1, 
+                (pos.y + diff.y * box_width) + 1, 
+                (box_width - 2) as u32, 
+                (box_width - 2) as u32
             );
             canvas.fill_rect(rect);
         }
@@ -209,6 +237,7 @@ struct TetrisBoard {
     height: usize,
     board: Vec<Vec<TetrisUnitBlock>>,
     active_piece: TetrisPiece,
+    tetris_gen: RandomTetrisPieceGenerator,
 }
 
 impl TetrisBoard {
@@ -239,7 +268,8 @@ impl TetrisBoard {
             width: width,
             height: height,
             board: board,
-            active_piece: TetrisPiece::build_stick_piece(Pos2D::xy(4, 0))
+            active_piece: TetrisPiece::build_i_piece(Pos2D::xy(5, 0)),
+            tetris_gen: RandomTetrisPieceGenerator{}
         }
     }
 
@@ -252,11 +282,33 @@ impl TetrisBoard {
         true
     }
 
+    fn is_game_over(&self) -> bool {
+        for pos in self.active_piece.iter() {
+            if pos.y == 0 {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn consume(&mut self, piece: TetrisPiece) {
+        for pos in piece.iter() {
+            self.board[pos.y as usize][pos.x as usize].is_filled = true;
+            self.board[pos.y as usize][pos.x as usize].color = piece.color;
+        }
+
+    }
+
     fn update(&mut self) {
         self.active_piece.move_by(&Pos2D::xy(0, 1));
 
         if !self.is_valid() {
             self.active_piece.move_by(&Pos2D::xy(0, -1));
+            if (self.is_game_over()) {
+                return;
+            }
+            let piece_to_consume = mem::replace(&mut self.active_piece, self.tetris_gen.get_next_piece(Pos2D::xy(5,1)));
+            self.consume(piece_to_consume);
         }
 
     }
@@ -268,10 +320,10 @@ impl Drawable for TetrisUnitBlock {
         let box_width = 20;
         canvas.set_draw_color(self.color);
         let rect = Rect::new(
-                pos.x,  
-                pos.y, 
-                box_width as u32, 
-                box_width as u32
+                pos.x + 1,  
+                pos.y + 1, 
+                box_width - 2 as u32, 
+                box_width - 2 as u32
         );
         canvas.fill_rect(rect);
     }
@@ -333,6 +385,6 @@ fn main() {
 
 
         canvas.present();
-        thread::sleep(Duration::new(1, 0));
+        thread::sleep(Duration::new(0, 100_000_000));
     }
 }
