@@ -3,8 +3,8 @@ extern crate rand;
 
 
 use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use std::time::Duration;
+use sdl2::keyboard::{Keycode, Scancode};
+use std::time::{Duration, Instant};
 use std::thread;
 use sdl2::render::{Canvas, RenderTarget};
 use sdl2::pixels::Color;
@@ -12,6 +12,13 @@ use sdl2::rect::Rect;
 use std::mem;
 use rand::Rng;
 
+
+static start_pos: Pos2D = Pos2D {
+    x: 5,
+    y: 1
+};
+
+#[derive(Copy, Clone)]
 struct Pos2D {
     x: i32,
     y: i32,
@@ -25,9 +32,16 @@ impl Pos2D {
         }
     }
 
-    fn add(&mut self, pos: &Pos2D) {
+    fn add(&mut self, pos: Pos2D) {
         self.x = self.x + pos.x;
         self.y = self.y + pos.y;
+    }
+
+    fn inv(&self) -> Self {
+        Pos2D {
+            x: -self.x,
+            y: -self.y,
+        }
     }
 }
 
@@ -66,9 +80,9 @@ impl TetrisPiece {
             pos: pos,
             shape: [
                 [ Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(1,1), Pos2D::xy(0,1) ],
-                [ Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(2,0), Pos2D::xy(3,0) ],
-                [ Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(2,0), Pos2D::xy(3,0) ],
-                [ Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(2,0), Pos2D::xy(3,0) ],
+                [ Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(1,1), Pos2D::xy(0,1) ],
+                [ Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(1,1), Pos2D::xy(0,1) ],
+                [ Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(1,1), Pos2D::xy(0,1) ],
             ],
             color: Color::RGB(255, 255, 0),
             orientation: 0usize,
@@ -146,12 +160,15 @@ impl TetrisPiece {
         }
     }
 
-    fn move_by(&mut self, pos: &Pos2D) {
-        self.pos.add(&pos);
+    fn move_by(&mut self, pos: Pos2D) {
+        self.pos.add(pos);
     }
 
-    fn rotate(&mut self) {
+    fn rotate_right(&mut self) {
         self.orientation = (self.orientation + 1) % 4;
+    }
+    fn rotate_left(&mut self) {
+        self.orientation = (self.orientation + 3) % 4;
     }
 
     fn iter(&self) -> TetrisPieceIter {
@@ -238,7 +255,26 @@ struct TetrisBoard {
     board: Vec<Vec<TetrisUnitBlock>>,
     active_piece: TetrisPiece,
     tetris_gen: RandomTetrisPieceGenerator,
+    gravity: u32,
+    gravity_countdown: u32,
 }
+
+struct Input {
+    left_key_pressed: bool,
+    right_key_pressed: bool,
+    up_key_pressed:bool,
+    down_key_pressed:bool,
+}
+
+impl Input {
+    fn reset(&mut self) {
+        self.left_key_pressed = false;
+        self.right_key_pressed = false;
+        self.up_key_pressed = false;
+        self.down_key_pressed = false;
+    }
+}
+
 
 impl TetrisBoard {
 
@@ -268,8 +304,10 @@ impl TetrisBoard {
             width: width,
             height: height,
             board: board,
-            active_piece: TetrisPiece::build_i_piece(Pos2D::xy(5, 0)),
-            tetris_gen: RandomTetrisPieceGenerator{}
+            active_piece: TetrisPiece::build_i_piece(start_pos),
+            tetris_gen: RandomTetrisPieceGenerator{},
+            gravity: 20,
+            gravity_countdown:  20,
         }
     }
 
@@ -291,6 +329,29 @@ impl TetrisBoard {
         false
     }
 
+    fn move_active_piece(&mut self, pos: Pos2D) -> bool {
+        self.active_piece.move_by(pos);
+
+        if !self.is_valid() {
+            self.active_piece.move_by(pos.inv());
+            false
+        } else {
+            true
+        }
+    }
+
+    fn rotate_active_piece_right(&mut self) -> bool {
+        self.active_piece.rotate_right();
+
+        if !self.is_valid() {
+            self.active_piece.rotate_left();
+            false
+        } else {
+            true
+        }
+
+    }
+
     fn consume(&mut self, piece: TetrisPiece) {
         for pos in piece.iter() {
             self.board[pos.y as usize][pos.x as usize].is_filled = true;
@@ -299,16 +360,37 @@ impl TetrisBoard {
 
     }
 
-    fn update(&mut self) {
-        self.active_piece.move_by(&Pos2D::xy(0, 1));
+    fn update(&mut self, input: &Input) {
+        // Handle Input
+        if (input.left_key_pressed) {
+            self.move_active_piece(Pos2D::xy(-1, 0));
+        } 
+        if (input.right_key_pressed) {
+            self.move_active_piece(Pos2D::xy(1, 0));
+        }
+        if (input.up_key_pressed) {
+            self.rotate_active_piece_right();
+        }
+        if (input.down_key_pressed) {
+            self.gravity = 5;
+        } else {
+            self.gravity = 20;
+        }
 
-        if !self.is_valid() {
-            self.active_piece.move_by(&Pos2D::xy(0, -1));
+        if (self.gravity_countdown > 0) {
+            self.gravity_countdown -= 1;
+            return;
+        }
+        self.gravity_countdown = self.gravity;
+
+        if !self.move_active_piece(Pos2D::xy(0, 1)) {
             if (self.is_game_over()) {
                 return;
+            } 
+            else {
+                let piece_to_consume = mem::replace(&mut self.active_piece, self.tetris_gen.get_next_piece(start_pos));
+                self.consume(piece_to_consume);
             }
-            let piece_to_consume = mem::replace(&mut self.active_piece, self.tetris_gen.get_next_piece(Pos2D::xy(5,1)));
-            self.consume(piece_to_consume);
         }
 
     }
@@ -365,18 +447,49 @@ fn main() {
 
     let mut tetris_board = TetrisBoard::new();
 
+    let mut last_updated = Instant::now();
+
+    let mut input : Input = Input {
+            left_key_pressed: false,
+            right_key_pressed: false,
+            up_key_pressed: false,
+            down_key_pressed: false,
+    };
 
     'running: loop {
+
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit {..} | Event::KeyDown {keycode: Some(Keycode::Escape), ..} => {
                     break 'running
                 }
+                Event::KeyDown {keycode: Some(Keycode::Left), ..}  => {
+                    input.left_key_pressed = true;
+                }
+                Event::KeyDown {keycode: Some(Keycode::Right), ..}  => {
+                    input.right_key_pressed = true;
+                }
+                Event::KeyDown {keycode: Some(Keycode::Up), ..}  => {
+                    input.up_key_pressed = true;
+                }
                 _ => {}
             }
         }
 
-        tetris_board.update();
+        if (event_pump.keyboard_state().is_scancode_pressed(Scancode::Down)) {
+            input.down_key_pressed = true;
+        }
+        else {
+            input.down_key_pressed = false;
+        }
+
+        let current_time = Instant::now();
+
+        if current_time.duration_since(last_updated) > Duration::new(0, 1_000_000_000 / 60) {
+            tetris_board.update(&input);
+            input.reset();
+            last_updated = current_time;
+        }
 
         canvas.set_draw_color(Color::RGB(0,0,0));
         canvas.fill_rect(Rect::new(0,0,width,height));
@@ -385,6 +498,5 @@ fn main() {
 
 
         canvas.present();
-        thread::sleep(Duration::new(0, 100_000_000));
     }
 }
