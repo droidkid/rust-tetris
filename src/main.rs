@@ -183,11 +183,9 @@ struct RandomTetrisPieceGenerator {
 }
 
 impl RandomTetrisPieceGenerator {
-
-
     fn get_next_piece(&self, pos: Pos2D) -> TetrisPiece {
         let mut rng = rand::thread_rng();
-        self.get_piece_for_num(rng.gen_range(0,6), pos).unwrap()
+        self.get_piece_for_num(rng.gen_range(0,7), pos).unwrap()
     }
 
     fn get_piece_for_num(&self, num: i32, pos: Pos2D) -> Option<TetrisPiece> {
@@ -198,6 +196,7 @@ impl RandomTetrisPieceGenerator {
             3 => Some(TetrisPiece::build_z_piece(pos)),
             4 => Some(TetrisPiece::build_j_piece(pos)),
             5 => Some(TetrisPiece::build_l_piece(pos)),
+            6 => Some(TetrisPiece::build_t_piece(pos)),
             _ => None
         }
     }
@@ -257,6 +256,8 @@ struct TetrisBoard {
     tetris_gen: RandomTetrisPieceGenerator,
     gravity: u32,
     gravity_countdown: u32,
+    lock_delay: u32,
+    lock_delay_countdown: u32,
 }
 
 struct Input {
@@ -308,6 +309,8 @@ impl TetrisBoard {
             tetris_gen: RandomTetrisPieceGenerator{},
             gravity: 20,
             gravity_countdown:  20,
+            lock_delay: 30,
+            lock_delay_countdown: 30
         }
     }
 
@@ -357,10 +360,47 @@ impl TetrisBoard {
             self.board[pos.y as usize][pos.x as usize].is_filled = true;
             self.board[pos.y as usize][pos.x as usize].color = piece.color;
         }
-
     }
 
+    fn is_row_full(&self, row: usize) -> bool {
+        for i in 1..self.width-1 {
+            if !self.board[row][i].is_filled {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn is_row_empty(&self, row:usize) -> bool {
+        for i in 0..self.width-1 {
+            if self.board[row][i].is_filled {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn shift_down(&mut self, row:usize) {
+        for i in (2..row+1).rev() {
+            for j in (1..self.width-1) {
+                self.board[i][j].is_filled = self.board[i-1][j].is_filled;
+                self.board[i][j].color = self.board[i-1][j].color;
+            }
+        }
+    }
+
+    fn clear_lines(&mut self) {
+        for i in (1..self.height-1).rev() {
+            while self.is_row_full(i) {
+                self.shift_down(i);
+            }
+        }
+    }
+
+
+
     fn update(&mut self, input: &Input) {
+
         // Handle Input
         if (input.left_key_pressed) {
             self.move_active_piece(Pos2D::xy(-1, 0));
@@ -379,22 +419,40 @@ impl TetrisBoard {
 
         if (self.gravity_countdown > 0) {
             self.gravity_countdown -= 1;
-            return;
         }
-        self.gravity_countdown = self.gravity;
+        if (self.lock_delay_countdown > 0) {
+            self.lock_delay_countdown -= 1;
+        }
 
-        if !self.move_active_piece(Pos2D::xy(0, 1)) {
-            if (self.is_game_over()) {
-                return;
-            } 
-            else {
-                let piece_to_consume = mem::replace(&mut self.active_piece, self.tetris_gen.get_next_piece(start_pos));
-                self.consume(piece_to_consume);
+
+        let mut move_down_success = true;
+
+        if self.gravity_countdown == 0 {
+            self.gravity_countdown = self.gravity;
+            move_down_success = self.move_active_piece(Pos2D::xy(0,1));
+            if move_down_success {
+                self.lock_delay_countdown= self.lock_delay;
             }
         }
 
-    }
+        if !move_down_success {
 
+            if self.lock_delay_countdown == 0 {
+                self.lock_delay_countdown = self.lock_delay;
+                if (self.is_game_over()) {
+                    return;
+                } 
+                else {
+                    let piece_to_consume = mem::replace(&mut self.active_piece, self.tetris_gen.get_next_piece(start_pos));
+                    self.consume(piece_to_consume);
+                    self.clear_lines();
+                }
+            }
+
+        }
+        else {
+        }
+    }
 }
 
 impl Drawable for TetrisUnitBlock {
