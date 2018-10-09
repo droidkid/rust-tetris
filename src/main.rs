@@ -10,7 +10,7 @@ use sdl2::render::{Canvas, RenderTarget};
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use std::mem;
-use rand::Rng;
+use rand::{thread_rng,Rng};
 
 
 static start_pos: Pos2D = Pos2D {
@@ -180,12 +180,34 @@ impl TetrisPiece {
 }
 
 struct RandomTetrisPieceGenerator {
+    piece_seq: Vec<i32>,
+    idx: usize,
 }
 
 impl RandomTetrisPieceGenerator {
-    fn get_next_piece(&self, pos: Pos2D) -> TetrisPiece {
-        let mut rng = rand::thread_rng();
-        self.get_piece_for_num(rng.gen_range(0,7), pos).unwrap()
+    fn new() -> Self {
+        RandomTetrisPieceGenerator {
+            piece_seq: RandomTetrisPieceGenerator::next_permut(),
+            idx: 0usize,
+        }
+    }
+    
+    fn next_permut() -> Vec<i32> {
+        let mut piece_seq: Vec<i32> = (0..7).collect();
+        {
+            let slice: &mut [i32] = &mut piece_seq;
+            thread_rng().shuffle(slice);
+        }
+        println!("{:?}",piece_seq);
+        piece_seq
+    }
+
+    fn get_next_piece(&mut self, pos: Pos2D) -> TetrisPiece {
+        self.idx = (self.idx + 1) % 7;
+        if self.idx == 0 {
+            self.piece_seq = RandomTetrisPieceGenerator::next_permut();
+        }
+        self.get_piece_for_num(self.piece_seq[self.idx], pos).unwrap()
     }
 
     fn get_piece_for_num(&self, num: i32, pos: Pos2D) -> Option<TetrisPiece> {
@@ -301,12 +323,14 @@ impl TetrisBoard {
             board[i][width-1] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
         }
 
+        let mut randomTetrisPieceGenerator = RandomTetrisPieceGenerator::new();
+
         TetrisBoard {
             width: width,
             height: height,
             board: board,
-            active_piece: TetrisPiece::build_i_piece(start_pos),
-            tetris_gen: RandomTetrisPieceGenerator{},
+            active_piece: randomTetrisPieceGenerator.get_next_piece(start_pos),
+            tetris_gen: randomTetrisPieceGenerator,
             gravity: 20,
             gravity_countdown:  20,
             lock_delay: 30,
