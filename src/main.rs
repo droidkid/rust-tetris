@@ -2,15 +2,27 @@ extern crate sdl2;
 extern crate rand;
 
 
+use rand::{thread_rng,Rng};
+
 use sdl2::event::Event;
 use sdl2::keyboard::{Keycode, Scancode};
-use std::time::{Duration, Instant};
-use std::thread;
-use sdl2::render::{Canvas, RenderTarget};
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
+use sdl2::render::{Canvas, RenderTarget};
+use sdl2::render::TextureQuery;
+
 use std::mem;
-use rand::{thread_rng,Rng};
+use std::path::Path;
+use std::thread;
+use std::time::{Duration, Instant};
+
+
+// handle the annoying Rect i32
+macro_rules! rect(
+    ($x:expr, $y:expr, $w:expr, $h:expr) => (
+        Rect::new($x as i32, $y as i32, $w as u32, $h as u32)
+    )
+);
 
 
 static start_pos: Pos2D = Pos2D {
@@ -198,7 +210,6 @@ impl RandomTetrisPieceGenerator {
             let slice: &mut [i32] = &mut piece_seq;
             thread_rng().shuffle(slice);
         }
-        println!("{:?}",piece_seq);
         piece_seq
     }
 
@@ -280,6 +291,7 @@ struct TetrisBoard {
     gravity_countdown: u32,
     lock_delay: u32,
     lock_delay_countdown: u32,
+    lines_cleared: u32
 }
 
 struct Input {
@@ -334,7 +346,8 @@ impl TetrisBoard {
             gravity: 20,
             gravity_countdown:  20,
             lock_delay: 30,
-            lock_delay_countdown: 30
+            lock_delay_countdown: 30,
+            lines_cleared: 0,
         }
     }
 
@@ -416,6 +429,7 @@ impl TetrisBoard {
     fn clear_lines(&mut self) {
         for i in (1..self.height-1).rev() {
             while self.is_row_full(i) {
+                self.lines_cleared += 1;
                 self.shift_down(i);
             }
         }
@@ -474,8 +488,6 @@ impl TetrisBoard {
             }
 
         }
-        else {
-        }
     }
 }
 
@@ -511,12 +523,14 @@ impl Drawable for TetrisBoard {
 }
 
 
+
 fn main() {
     let width = 800;
     let height = 600;
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
+    let ttf_context = sdl2::ttf::init().unwrap();
 
     let window = video_subsystem.window("Rust Tetris", width, height)
         .position_centered()
@@ -525,11 +539,21 @@ fn main() {
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
+    let texture_creator = canvas.texture_creator();
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    let mut tetris_board = TetrisBoard::new();
+    let font_path: &Path = Path::new("res/fonts/kenney_future.ttf"); 
+    let mut font = ttf_context.load_font(font_path, 28).unwrap();
 
+    let tetris_surface = font.render("Tetris").blended(Color::RGBA(255, 255, 255, 255)).unwrap();
+    let tetris_texture = texture_creator.create_texture_from_surface(&tetris_surface).unwrap();
+    let TextureQuery { width: text_width, height: text_height, .. } = tetris_texture.query();
+    let tetris_target_rect = Rect::new(300, 10, text_width, text_height);
+
+
+    let mut tetris_board = TetrisBoard::new();
     let mut last_updated = Instant::now();
+
 
     let mut input : Input = Input {
             left_key_pressed: false,
@@ -577,7 +601,16 @@ fn main() {
         canvas.fill_rect(Rect::new(0,0,width,height));
 
         tetris_board.draw(&mut canvas, Pos2D::xy(250,50));
+        {
+            let score_surface = font.render(&format!("Lines : {}", tetris_board.lines_cleared))
+                                            .blended(Color::RGBA(255, 255, 255, 255)).unwrap();
+            let score_texture = texture_creator.create_texture_from_surface(&score_surface).unwrap();
+            let TextureQuery { width: score_width, height: score_height, .. } = score_texture.query();
+            let score_target_rect = Rect::new(500, 100, score_width/2 , score_height/2);
+            canvas.copy(&score_texture, None, Some(score_target_rect)).unwrap();
+        }
 
+         canvas.copy(&tetris_texture, None, Some(tetris_target_rect)).unwrap();
 
         canvas.present();
     }
