@@ -656,25 +656,26 @@ fn main() {
             tetris_board.update(&input);
             input.reset();
             last_updated = current_time;
+
+            canvas.set_draw_color(Color::RGB(0,0,0));
+            canvas.fill_rect(Rect::new(0,0,width,height));
+
+            tetris_board.draw(&mut canvas, Pos2D::xy(250,50));
+
+            draw_text(&mut canvas, &texture_creator, Pos2D::xy(50,10), &format!("Left, Right to move " ), &font, 3, Color::RGB(255,255,255));
+            draw_text(&mut canvas, &texture_creator, Pos2D::xy(50,20), &format!("Up to rotate" ), &font, 3, Color::RGB(255,255,255));
+            draw_text(&mut canvas, &texture_creator, Pos2D::xy(50,30), &format!("Down to drop" ), &font, 3, Color::RGB(255,255,255));
+            draw_text(&mut canvas, &texture_creator, Pos2D::xy(500,10), &format!("Lines : {}", tetris_board.lines_cleared), &font, 1, Color::RGB(255,255,255));
+            draw_text(&mut canvas, &texture_creator, Pos2D::xy(500,40), &format!("Level : {}", tetris_board.level), &font, 1, Color::RGB(255,255,255));
+            draw_text(&mut canvas, &texture_creator, Pos2D::xy(300,10), "Tetris", &font, 1, Color::RGB(255,255,255));
+
+            if tetris_board.is_game_over {
+                draw_text(&mut canvas, &texture_creator, Pos2D::xy(280,300), "GAME OVER!", &font, 1, Color::RGB(255, 0, 0));
+                draw_text(&mut canvas, &texture_creator, Pos2D::xy(140,340), "Press UP arrow key to restart", &font, 1, Color::RGB(128, 0, 0));
+            }
+
+            canvas.present();
         }
 
-        canvas.set_draw_color(Color::RGB(0,0,0));
-        canvas.fill_rect(Rect::new(0,0,width,height));
-
-        tetris_board.draw(&mut canvas, Pos2D::xy(250,50));
-
-         draw_text(&mut canvas, &texture_creator, Pos2D::xy(50,10), &format!("Left, Right to move " ), &font, 3, Color::RGB(255,255,255));
-         draw_text(&mut canvas, &texture_creator, Pos2D::xy(50,20), &format!("Up to rotate" ), &font, 3, Color::RGB(255,255,255));
-         draw_text(&mut canvas, &texture_creator, Pos2D::xy(50,30), &format!("Down to drop" ), &font, 3, Color::RGB(255,255,255));
-         draw_text(&mut canvas, &texture_creator, Pos2D::xy(500,10), &format!("Lines : {}", tetris_board.lines_cleared), &font, 1, Color::RGB(255,255,255));
-         draw_text(&mut canvas, &texture_creator, Pos2D::xy(500,40), &format!("Level : {}", tetris_board.level), &font, 1, Color::RGB(255,255,255));
-         draw_text(&mut canvas, &texture_creator, Pos2D::xy(300,10), "Tetris", &font, 1, Color::RGB(255,255,255));
-
-         if tetris_board.is_game_over {
-            draw_text(&mut canvas, &texture_creator, Pos2D::xy(280,300), "GAME OVER!", &font, 1, Color::RGB(255, 0, 0));
-            draw_text(&mut canvas, &texture_creator, Pos2D::xy(140,340), "Press UP arrow key to restart", &font, 1, Color::RGB(128, 0, 0));
-         }
-
-        canvas.present();
     }
 }
