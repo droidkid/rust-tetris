@@ -8,27 +8,21 @@ use sdl2::event::Event;
 use sdl2::keyboard::{Keycode, Scancode};
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
-use sdl2::render::{Canvas, RenderTarget};
+use sdl2::render::{Canvas, RenderTarget, TextureCreator};
 use sdl2::render::TextureQuery;
+use sdl2::ttf::Font;
 
 use std::mem;
 use std::path::Path;
 use std::thread;
 use std::time::{Duration, Instant};
 
-
-// handle the annoying Rect i32
-macro_rules! rect(
-    ($x:expr, $y:expr, $w:expr, $h:expr) => (
-        Rect::new($x as i32, $y as i32, $w as u32, $h as u32)
-    )
-);
-
-
 static start_pos: Pos2D = Pos2D {
     x: 5,
-    y: 1
+    y: 2
 };
+static tetris_board_width : usize = 12;
+static tetris_board_height : usize = 24;
 
 #[derive(Copy, Clone)]
 struct Pos2D {
@@ -203,8 +197,13 @@ impl RandomTetrisPieceGenerator {
             idx: 0usize,
         }
     }
+
+    fn reset(&mut self) {
+        self.idx = 6;
+    }
     
     fn next_permut() -> Vec<i32> {
+        // Generate a permutation of every tetris piece.
         let mut piece_seq: Vec<i32> = (0..7).collect();
         {
             let slice: &mut [i32] = &mut piece_seq;
@@ -276,24 +275,6 @@ impl Drawable for TetrisPiece {
     }
 }
 
-struct TetrisUnitBlock {
-    is_filled: bool,
-    color: Color,
-}
-
-struct TetrisBoard {
-    width: usize,
-    height: usize,
-    board: Vec<Vec<TetrisUnitBlock>>,
-    active_piece: TetrisPiece,
-    tetris_gen: RandomTetrisPieceGenerator,
-    gravity: u32,
-    gravity_countdown: u32,
-    lock_delay: u32,
-    lock_delay_countdown: u32,
-    lines_cleared: u32
-}
-
 struct Input {
     left_key_pressed: bool,
     right_key_pressed: bool,
@@ -310,14 +291,37 @@ impl Input {
     }
 }
 
+struct TetrisUnitBlock {
+    is_filled: bool,
+    color: Color,
+}
+
+struct TetrisBoard {
+    width: usize,
+    height: usize,
+    board: Vec<Vec<TetrisUnitBlock>>,
+    active_piece: TetrisPiece,
+    tetris_gen: RandomTetrisPieceGenerator,
+    gravity: u32,
+    gravity_countdown: u32,
+    lock_delay: u32,
+    lock_delay_countdown: u32,
+    lines_cleared: u32,
+    is_game_over: bool,
+    game_over_delay: u32,
+    game_over_countdown: u32,
+    locking_state: bool,
+    level: u32,
+}
+
 
 impl TetrisBoard {
 
     fn new() -> Self {
 
         let mut board: Vec<Vec<TetrisUnitBlock>> = Vec::new();
-        let width: usize = 12;
-        let height: usize = 24;
+        let width: usize = tetris_board_width;
+        let height: usize = tetris_board_height;
 
         for i in 0usize..height {
             board.push(Vec::new());
@@ -348,6 +352,11 @@ impl TetrisBoard {
             lock_delay: 30,
             lock_delay_countdown: 30,
             lines_cleared: 0,
+            is_game_over: false,
+            game_over_delay: 60,
+            game_over_countdown: 0,
+            locking_state: false,
+            level: 1,
         }
     }
 
@@ -358,15 +367,6 @@ impl TetrisBoard {
             }
         }
         true
-    }
-
-    fn is_game_over(&self) -> bool {
-        for pos in self.active_piece.iter() {
-            if pos.y == 0 {
-                return true;
-            }
-        }
-        false
     }
 
     fn move_active_piece(&mut self, pos: Pos2D) -> bool {
@@ -435,9 +435,49 @@ impl TetrisBoard {
         }
     }
 
+    fn reset(&mut self) {
+        for i in 0usize..self.width {
+            for j in 0usize ..self.height {
+                self.board[j][i] = TetrisUnitBlock {is_filled: false, color: Color::RGB(0,0,0)};
+            }
+        }
+        for i in 0usize..self.width {
+            self.board[0][i] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
+            self.board[self.height-1][i] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
+        }
+        for i in 0usize..self.height {
+            self.board[i][0] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
+            self.board[i][self.width-1] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
+        }
+
+        self.tetris_gen.reset();
+        self.active_piece = self.tetris_gen.get_next_piece(start_pos);
+        self.gravity= 20;
+        self.gravity_countdown=  20;
+        self.lock_delay= 30;
+        self.lock_delay_countdown= 30;
+        self.lines_cleared= 0;
+        self.is_game_over= false;
+        self.game_over_delay= 60;
+        self.game_over_countdown= 0;
+        self.locking_state = false;
+        self.level = 1;
+
+    }
+
 
 
     fn update(&mut self, input: &Input) {
+
+        if self.is_game_over {
+            if (self.game_over_countdown > 0) {
+                self.game_over_countdown -= 1;
+            }
+            if self.game_over_countdown == 0 && input.up_key_pressed {
+                self.reset();
+            }
+            return;
+        }
 
         // Handle Input
         if (input.left_key_pressed) {
@@ -449,45 +489,57 @@ impl TetrisBoard {
         if (input.up_key_pressed) {
             self.rotate_active_piece_right();
         }
+
         if (input.down_key_pressed) {
-            self.gravity = 5;
+            self.gravity = 2;
         } else {
-            self.gravity = 20;
+            self.gravity = 3 * (11 - self.level);
         }
 
+        // Countdown the timers.
         if (self.gravity_countdown > 0) {
             self.gravity_countdown -= 1;
         }
-        if (self.lock_delay_countdown > 0) {
+        if (self.lock_delay_countdown > 0 && self.locking_state) {
             self.lock_delay_countdown -= 1;
         }
 
 
         let mut move_down_success = true;
 
-        if self.gravity_countdown == 0 {
+        // Move piece down if gravity countdown is done.
+        if self.gravity_countdown == 0 || self.locking_state {
             self.gravity_countdown = self.gravity;
             move_down_success = self.move_active_piece(Pos2D::xy(0,1));
+
+            // Reset lock delay if piece moved down.
             if move_down_success {
-                self.lock_delay_countdown= self.lock_delay;
-            }
-        }
-
-        if !move_down_success {
-
-            if self.lock_delay_countdown == 0 {
                 self.lock_delay_countdown = self.lock_delay;
-                if (self.is_game_over()) {
-                    return;
-                } 
-                else {
-                    let piece_to_consume = mem::replace(&mut self.active_piece, self.tetris_gen.get_next_piece(start_pos));
-                    self.consume(piece_to_consume);
-                    self.clear_lines();
-                }
+                self.game_over_countdown = self.game_over_delay;
+                self.locking_state = false;
+            } else {
+                self.locking_state = true;
+            }
+        }
+
+        if self.locking_state && self.lock_delay_countdown == 0 {
+            let piece_to_consume = mem::replace(&mut self.active_piece, self.tetris_gen.get_next_piece(start_pos));
+            self.consume(piece_to_consume);
+            self.clear_lines();
+
+            if !self.is_valid() {
+                self.is_game_over = true;
             }
 
+            self.lock_delay_countdown = self.lock_delay;
+            self.locking_state = false;
         }
+
+        self.level = (self.lines_cleared / 10) + 1;
+        if (self.level >= 10) {
+            self.level = 10;
+        }
+
     }
 }
 
@@ -522,6 +574,21 @@ impl Drawable for TetrisBoard {
     }
 }
 
+fn draw_text<T:RenderTarget, F>(
+    canvas: &mut Canvas<T>, 
+    texture_creator: & TextureCreator<F>, 
+    pos:Pos2D, 
+    text: &str, 
+    font: &Font, 
+    scale_down: u32,
+    color: Color,
+    ) {
+    let surface = font.render(text).blended(color).unwrap();
+    let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
+    let TextureQuery { width: text_width, height: text_height, .. } = texture.query();
+    let rect = Rect::new(pos.x, pos.y, text_width/scale_down, text_height/scale_down);
+    canvas.copy(&texture, None, Some(rect)).unwrap();
+}
 
 
 fn main() {
@@ -544,12 +611,6 @@ fn main() {
 
     let font_path: &Path = Path::new("res/fonts/kenney_future.ttf"); 
     let mut font = ttf_context.load_font(font_path, 28).unwrap();
-
-    let tetris_surface = font.render("Tetris").blended(Color::RGBA(255, 255, 255, 255)).unwrap();
-    let tetris_texture = texture_creator.create_texture_from_surface(&tetris_surface).unwrap();
-    let TextureQuery { width: text_width, height: text_height, .. } = tetris_texture.query();
-    let tetris_target_rect = Rect::new(300, 10, text_width, text_height);
-
 
     let mut tetris_board = TetrisBoard::new();
     let mut last_updated = Instant::now();
@@ -601,16 +662,18 @@ fn main() {
         canvas.fill_rect(Rect::new(0,0,width,height));
 
         tetris_board.draw(&mut canvas, Pos2D::xy(250,50));
-        {
-            let score_surface = font.render(&format!("Lines : {}", tetris_board.lines_cleared))
-                                            .blended(Color::RGBA(255, 255, 255, 255)).unwrap();
-            let score_texture = texture_creator.create_texture_from_surface(&score_surface).unwrap();
-            let TextureQuery { width: score_width, height: score_height, .. } = score_texture.query();
-            let score_target_rect = Rect::new(500, 100, score_width/2 , score_height/2);
-            canvas.copy(&score_texture, None, Some(score_target_rect)).unwrap();
-        }
 
-         canvas.copy(&tetris_texture, None, Some(tetris_target_rect)).unwrap();
+         draw_text(&mut canvas, &texture_creator, Pos2D::xy(50,10), &format!("Left, Right to move " ), &font, 3, Color::RGB(255,255,255));
+         draw_text(&mut canvas, &texture_creator, Pos2D::xy(50,20), &format!("Up to rotate" ), &font, 3, Color::RGB(255,255,255));
+         draw_text(&mut canvas, &texture_creator, Pos2D::xy(50,30), &format!("Down to drop" ), &font, 3, Color::RGB(255,255,255));
+         draw_text(&mut canvas, &texture_creator, Pos2D::xy(500,10), &format!("Lines : {}", tetris_board.lines_cleared), &font, 1, Color::RGB(255,255,255));
+         draw_text(&mut canvas, &texture_creator, Pos2D::xy(500,40), &format!("Level : {}", tetris_board.level), &font, 1, Color::RGB(255,255,255));
+         draw_text(&mut canvas, &texture_creator, Pos2D::xy(300,10), "Tetris", &font, 1, Color::RGB(255,255,255));
+
+         if tetris_board.is_game_over {
+            draw_text(&mut canvas, &texture_creator, Pos2D::xy(280,300), "GAME OVER!", &font, 1, Color::RGB(255, 0, 0));
+            draw_text(&mut canvas, &texture_creator, Pos2D::xy(140,340), "Press UP arrow key to restart", &font, 1, Color::RGB(128, 0, 0));
+         }
 
         canvas.present();
     }
