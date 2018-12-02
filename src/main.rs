@@ -1,15 +1,14 @@
-extern crate sdl2;
 extern crate rand;
+extern crate sdl2;
 
-
-use rand::{thread_rng,Rng};
+use rand::{thread_rng, Rng};
 
 use sdl2::event::Event;
 use sdl2::keyboard::{Keycode, Scancode};
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
-use sdl2::render::{Canvas, RenderTarget, TextureCreator};
 use sdl2::render::TextureQuery;
+use sdl2::render::{Canvas, RenderTarget, TextureCreator};
 use sdl2::ttf::Font;
 
 use std::mem;
@@ -17,12 +16,9 @@ use std::path::Path;
 use std::thread;
 use std::time::{Duration, Instant};
 
-static start_pos: Pos2D = Pos2D {
-    x: 5,
-    y: 2
-};
-static tetris_board_width : usize = 12;
-static tetris_board_height : usize = 24;
+static start_pos: Pos2D = Pos2D { x: 5, y: 2 };
+static tetris_board_width: usize = 12;
+static tetris_board_height: usize = 24;
 
 #[derive(Copy, Clone)]
 struct Pos2D {
@@ -31,11 +27,8 @@ struct Pos2D {
 }
 
 impl Pos2D {
-    fn xy(x:i32, y:i32) -> Self {
-        Pos2D {
-            x,
-            y,
-        }
+    fn xy(x: i32, y: i32) -> Self {
+        Pos2D { x, y }
     }
 
     fn add(&mut self, pos: Pos2D) {
@@ -51,30 +44,47 @@ impl Pos2D {
     }
 }
 
-
 trait Drawable {
-    fn draw<T:RenderTarget>(&self, canvas: &mut Canvas<T>, pos:Pos2D);
+    fn draw<T: RenderTarget>(&self, canvas: &mut Canvas<T>, pos: Pos2D);
 }
-
 
 struct TetrisPiece {
     pos: Pos2D,
     shape: [[Pos2D; 4]; 4],
-    orientation: usize, 
+    orientation: usize,
     // Drawing Related Constants
     color: Color,
 }
-
 
 impl TetrisPiece {
     fn build_i_piece(pos: Pos2D) -> Self {
         TetrisPiece {
             pos: pos,
             shape: [
-                [ Pos2D::xy(-1,0), Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(2,0) ],
-                [ Pos2D::xy(1,-1), Pos2D::xy(1,0), Pos2D::xy(1,1), Pos2D::xy(1,2) ],
-                [ Pos2D::xy(-1,1), Pos2D::xy(0,1), Pos2D::xy(1,1), Pos2D::xy(2,1) ],
-                [ Pos2D::xy(0,-1), Pos2D::xy(0,0), Pos2D::xy(0,1), Pos2D::xy(0,2) ],
+                [
+                    Pos2D::xy(-1, 0),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(2, 0),
+                ],
+                [
+                    Pos2D::xy(1, -1),
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(1, 1),
+                    Pos2D::xy(1, 2),
+                ],
+                [
+                    Pos2D::xy(-1, 1),
+                    Pos2D::xy(0, 1),
+                    Pos2D::xy(1, 1),
+                    Pos2D::xy(2, 1),
+                ],
+                [
+                    Pos2D::xy(0, -1),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(0, 1),
+                    Pos2D::xy(0, 2),
+                ],
             ],
             color: Color::RGB(0, 255, 255),
             orientation: 0usize,
@@ -85,10 +95,30 @@ impl TetrisPiece {
         TetrisPiece {
             pos: pos,
             shape: [
-                [ Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(1,1), Pos2D::xy(0,1) ],
-                [ Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(1,1), Pos2D::xy(0,1) ],
-                [ Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(1,1), Pos2D::xy(0,1) ],
-                [ Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(1,1), Pos2D::xy(0,1) ],
+                [
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(1, 1),
+                    Pos2D::xy(0, 1),
+                ],
+                [
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(1, 1),
+                    Pos2D::xy(0, 1),
+                ],
+                [
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(1, 1),
+                    Pos2D::xy(0, 1),
+                ],
+                [
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(1, 1),
+                    Pos2D::xy(0, 1),
+                ],
             ],
             color: Color::RGB(255, 255, 0),
             orientation: 0usize,
@@ -99,10 +129,30 @@ impl TetrisPiece {
         TetrisPiece {
             pos: pos,
             shape: [
-                [ Pos2D::xy(0,-1), Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(-1,0) ],
-                [ Pos2D::xy(1,0), Pos2D::xy(0,1), Pos2D::xy(0,-1), Pos2D::xy(0,0) ],
-                [ Pos2D::xy(0,1), Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(-1,0) ],
-                [ Pos2D::xy(-1,0), Pos2D::xy(0,1), Pos2D::xy(0,-1), Pos2D::xy(0,0) ],
+                [
+                    Pos2D::xy(0, -1),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(-1, 0),
+                ],
+                [
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(0, 1),
+                    Pos2D::xy(0, -1),
+                    Pos2D::xy(0, 0),
+                ],
+                [
+                    Pos2D::xy(0, 1),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(-1, 0),
+                ],
+                [
+                    Pos2D::xy(-1, 0),
+                    Pos2D::xy(0, 1),
+                    Pos2D::xy(0, -1),
+                    Pos2D::xy(0, 0),
+                ],
             ],
             color: Color::RGB(128, 0, 128),
             orientation: 0usize,
@@ -113,10 +163,30 @@ impl TetrisPiece {
         TetrisPiece {
             pos: pos,
             shape: [
-                [ Pos2D::xy(1,-1), Pos2D::xy(0,-1), Pos2D::xy(0,0), Pos2D::xy(-1,0) ],
-                [ Pos2D::xy(0,-1), Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(1,1) ],
-                [ Pos2D::xy(1,0), Pos2D::xy(0,0), Pos2D::xy(0,1), Pos2D::xy(-1,1) ],
-                [ Pos2D::xy(-1,-1), Pos2D::xy(0,0), Pos2D::xy(-1,0), Pos2D::xy(0,1) ],
+                [
+                    Pos2D::xy(1, -1),
+                    Pos2D::xy(0, -1),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(-1, 0),
+                ],
+                [
+                    Pos2D::xy(0, -1),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(1, 1),
+                ],
+                [
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(0, 1),
+                    Pos2D::xy(-1, 1),
+                ],
+                [
+                    Pos2D::xy(-1, -1),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(-1, 0),
+                    Pos2D::xy(0, 1),
+                ],
             ],
 
             color: Color::RGB(0, 255, 0),
@@ -127,12 +197,32 @@ impl TetrisPiece {
     fn build_z_piece(pos: Pos2D) -> Self {
         TetrisPiece {
             pos: pos,
-            shape: [ 
-                [ Pos2D::xy(-1,-1), Pos2D::xy(0,-1), Pos2D::xy(0,0), Pos2D::xy(1,0) ],
-                [ Pos2D::xy(1,-1), Pos2D::xy(1,0), Pos2D::xy(0,0), Pos2D::xy(0,1) ],
-                [ Pos2D::xy(-1,0), Pos2D::xy(0,0), Pos2D::xy(0,1), Pos2D::xy(1,1) ],
-                [ Pos2D::xy(0,-1), Pos2D::xy(0,0), Pos2D::xy(-1,0), Pos2D::xy(-1,1) ],
+            shape: [
+                [
+                    Pos2D::xy(-1, -1),
+                    Pos2D::xy(0, -1),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(1, 0),
                 ],
+                [
+                    Pos2D::xy(1, -1),
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(0, 1),
+                ],
+                [
+                    Pos2D::xy(-1, 0),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(0, 1),
+                    Pos2D::xy(1, 1),
+                ],
+                [
+                    Pos2D::xy(0, -1),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(-1, 0),
+                    Pos2D::xy(-1, 1),
+                ],
+            ],
             color: Color::RGB(255, 0, 0),
             orientation: 0usize,
         }
@@ -141,11 +231,31 @@ impl TetrisPiece {
     fn build_j_piece(pos: Pos2D) -> Self {
         TetrisPiece {
             pos: pos,
-            shape:[ 
-                [ Pos2D::xy(-1,0), Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(-1,-1) ],
-                [ Pos2D::xy(0,-1), Pos2D::xy(0,0), Pos2D::xy(0,1), Pos2D::xy(1,-1) ],
-                [ Pos2D::xy(-1,0), Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(1,1) ],
-                [ Pos2D::xy(0,-1), Pos2D::xy(0,0), Pos2D::xy(0,1), Pos2D::xy(-1,1) ],
+            shape: [
+                [
+                    Pos2D::xy(-1, 0),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(-1, -1),
+                ],
+                [
+                    Pos2D::xy(0, -1),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(0, 1),
+                    Pos2D::xy(1, -1),
+                ],
+                [
+                    Pos2D::xy(-1, 0),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(1, 1),
+                ],
+                [
+                    Pos2D::xy(0, -1),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(0, 1),
+                    Pos2D::xy(-1, 1),
+                ],
             ],
             color: Color::RGB(0, 0, 255),
             orientation: 0usize,
@@ -156,10 +266,30 @@ impl TetrisPiece {
         TetrisPiece {
             pos: pos,
             shape: [
-                [ Pos2D::xy(-1,0), Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(1,-1) ],
-                [ Pos2D::xy(0,-1), Pos2D::xy(0,0), Pos2D::xy(0,1), Pos2D::xy(1,1) ],
-                [ Pos2D::xy(-1,0), Pos2D::xy(0,0), Pos2D::xy(1,0), Pos2D::xy(-1,1) ],
-                [ Pos2D::xy(0,-1), Pos2D::xy(0,0), Pos2D::xy(0,1), Pos2D::xy(-1,-1) ],
+                [
+                    Pos2D::xy(-1, 0),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(1, -1),
+                ],
+                [
+                    Pos2D::xy(0, -1),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(0, 1),
+                    Pos2D::xy(1, 1),
+                ],
+                [
+                    Pos2D::xy(-1, 0),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(1, 0),
+                    Pos2D::xy(-1, 1),
+                ],
+                [
+                    Pos2D::xy(0, -1),
+                    Pos2D::xy(0, 0),
+                    Pos2D::xy(0, 1),
+                    Pos2D::xy(-1, -1),
+                ],
             ],
             color: Color::RGB(255, 165, 0),
             orientation: 0usize,
@@ -201,7 +331,7 @@ impl RandomTetrisPieceGenerator {
     fn reset(&mut self) {
         self.idx = 6;
     }
-    
+
     fn next_permut() -> Vec<i32> {
         // Generate a permutation of every tetris piece.
         let mut piece_seq: Vec<i32> = (0..7).collect();
@@ -217,7 +347,8 @@ impl RandomTetrisPieceGenerator {
         if self.idx == 0 {
             self.piece_seq = RandomTetrisPieceGenerator::next_permut();
         }
-        self.get_piece_for_num(self.piece_seq[self.idx], pos).unwrap()
+        self.get_piece_for_num(self.piece_seq[self.idx], pos)
+            .unwrap()
     }
 
     fn get_piece_for_num(&self, num: i32, pos: Pos2D) -> Option<TetrisPiece> {
@@ -229,7 +360,7 @@ impl RandomTetrisPieceGenerator {
             4 => Some(TetrisPiece::build_j_piece(pos)),
             5 => Some(TetrisPiece::build_l_piece(pos)),
             6 => Some(TetrisPiece::build_t_piece(pos)),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -258,17 +389,16 @@ impl<'a> Iterator for TetrisPieceIter<'a> {
     }
 }
 
-
 impl Drawable for TetrisPiece {
-    fn draw<T:RenderTarget>(&self, canvas: &mut Canvas<T>, pos:Pos2D) {
+    fn draw<T: RenderTarget>(&self, canvas: &mut Canvas<T>, pos: Pos2D) {
         let box_width = 20;
         canvas.set_draw_color(self.color);
         for diff in self.shape[self.orientation].iter() {
             let rect = Rect::new(
-                (pos.x + diff.x * box_width) + 1, 
-                (pos.y + diff.y * box_width) + 1, 
-                (box_width - 2) as u32, 
-                (box_width - 2) as u32
+                (pos.x + diff.x * box_width) + 1,
+                (pos.y + diff.y * box_width) + 1,
+                (box_width - 2) as u32,
+                (box_width - 2) as u32,
             );
             canvas.fill_rect(rect);
         }
@@ -278,8 +408,8 @@ impl Drawable for TetrisPiece {
 struct Input {
     left_key_pressed: bool,
     right_key_pressed: bool,
-    up_key_pressed:bool,
-    down_key_pressed:bool,
+    up_key_pressed: bool,
+    down_key_pressed: bool,
 }
 
 impl Input {
@@ -314,11 +444,8 @@ struct TetrisBoard {
     level: u32,
 }
 
-
 impl TetrisBoard {
-
     fn new() -> Self {
-
         let mut board: Vec<Vec<TetrisUnitBlock>> = Vec::new();
         let width: usize = tetris_board_width;
         let height: usize = tetris_board_height;
@@ -326,17 +453,32 @@ impl TetrisBoard {
         for i in 0usize..height {
             board.push(Vec::new());
             for _ in 0usize..width {
-                board[i].push(TetrisUnitBlock { is_filled: false, color: Color::RGB(0,0,0) } );
+                board[i].push(TetrisUnitBlock {
+                    is_filled: false,
+                    color: Color::RGB(0, 0, 0),
+                });
             }
         }
 
         for i in 0usize..width {
-            board[0][i] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
-            board[height-1][i] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
+            board[0][i] = TetrisUnitBlock {
+                is_filled: true,
+                color: Color::RGB(255, 255, 255),
+            };
+            board[height - 1][i] = TetrisUnitBlock {
+                is_filled: true,
+                color: Color::RGB(255, 255, 255),
+            };
         }
         for i in 0usize..height {
-            board[i][0] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
-            board[i][width-1] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
+            board[i][0] = TetrisUnitBlock {
+                is_filled: true,
+                color: Color::RGB(255, 255, 255),
+            };
+            board[i][width - 1] = TetrisUnitBlock {
+                is_filled: true,
+                color: Color::RGB(255, 255, 255),
+            };
         }
 
         let mut randomTetrisPieceGenerator = RandomTetrisPieceGenerator::new();
@@ -348,7 +490,7 @@ impl TetrisBoard {
             active_piece: randomTetrisPieceGenerator.get_next_piece(start_pos),
             tetris_gen: randomTetrisPieceGenerator,
             gravity: 20,
-            gravity_countdown:  20,
+            gravity_countdown: 20,
             lock_delay: 30,
             lock_delay_countdown: 30,
             lines_cleared: 0,
@@ -389,7 +531,6 @@ impl TetrisBoard {
         } else {
             true
         }
-
     }
 
     fn consume(&mut self, piece: TetrisPiece) {
@@ -400,7 +541,7 @@ impl TetrisBoard {
     }
 
     fn is_row_full(&self, row: usize) -> bool {
-        for i in 1..self.width-1 {
+        for i in 1..self.width - 1 {
             if !self.board[row][i].is_filled {
                 return false;
             }
@@ -408,8 +549,8 @@ impl TetrisBoard {
         true
     }
 
-    fn is_row_empty(&self, row:usize) -> bool {
-        for i in 0..self.width-1 {
+    fn is_row_empty(&self, row: usize) -> bool {
+        for i in 0..self.width - 1 {
             if self.board[row][i].is_filled {
                 return false;
             }
@@ -417,17 +558,17 @@ impl TetrisBoard {
         true
     }
 
-    fn shift_down(&mut self, row:usize) {
-        for i in (2..row+1).rev() {
-            for j in (1..self.width-1) {
-                self.board[i][j].is_filled = self.board[i-1][j].is_filled;
-                self.board[i][j].color = self.board[i-1][j].color;
+    fn shift_down(&mut self, row: usize) {
+        for i in (2..row + 1).rev() {
+            for j in (1..self.width - 1) {
+                self.board[i][j].is_filled = self.board[i - 1][j].is_filled;
+                self.board[i][j].color = self.board[i - 1][j].color;
             }
         }
     }
 
     fn clear_lines(&mut self) {
-        for i in (1..self.height-1).rev() {
+        for i in (1..self.height - 1).rev() {
             while self.is_row_full(i) {
                 self.lines_cleared += 1;
                 self.shift_down(i);
@@ -437,38 +578,49 @@ impl TetrisBoard {
 
     fn reset(&mut self) {
         for i in 0usize..self.width {
-            for j in 0usize ..self.height {
-                self.board[j][i] = TetrisUnitBlock {is_filled: false, color: Color::RGB(0,0,0)};
+            for j in 0usize..self.height {
+                self.board[j][i] = TetrisUnitBlock {
+                    is_filled: false,
+                    color: Color::RGB(0, 0, 0),
+                };
             }
         }
         for i in 0usize..self.width {
-            self.board[0][i] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
-            self.board[self.height-1][i] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
+            self.board[0][i] = TetrisUnitBlock {
+                is_filled: true,
+                color: Color::RGB(255, 255, 255),
+            };
+            self.board[self.height - 1][i] = TetrisUnitBlock {
+                is_filled: true,
+                color: Color::RGB(255, 255, 255),
+            };
         }
         for i in 0usize..self.height {
-            self.board[i][0] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
-            self.board[i][self.width-1] = TetrisUnitBlock { is_filled:true, color: Color::RGB(255,255,255) };
+            self.board[i][0] = TetrisUnitBlock {
+                is_filled: true,
+                color: Color::RGB(255, 255, 255),
+            };
+            self.board[i][self.width - 1] = TetrisUnitBlock {
+                is_filled: true,
+                color: Color::RGB(255, 255, 255),
+            };
         }
 
         self.tetris_gen.reset();
         self.active_piece = self.tetris_gen.get_next_piece(start_pos);
-        self.gravity= 20;
-        self.gravity_countdown=  20;
-        self.lock_delay= 30;
-        self.lock_delay_countdown= 30;
-        self.lines_cleared= 0;
-        self.is_game_over= false;
-        self.game_over_delay= 60;
-        self.game_over_countdown= 0;
+        self.gravity = 20;
+        self.gravity_countdown = 20;
+        self.lock_delay = 30;
+        self.lock_delay_countdown = 30;
+        self.lines_cleared = 0;
+        self.is_game_over = false;
+        self.game_over_delay = 60;
+        self.game_over_countdown = 0;
         self.locking_state = false;
         self.level = 1;
-
     }
 
-
-
     fn update(&mut self, input: &Input) {
-
         if self.is_game_over {
             if (self.game_over_countdown > 0) {
                 self.game_over_countdown -= 1;
@@ -482,7 +634,7 @@ impl TetrisBoard {
         // Handle Input
         if (input.left_key_pressed) {
             self.move_active_piece(Pos2D::xy(-1, 0));
-        } 
+        }
         if (input.right_key_pressed) {
             self.move_active_piece(Pos2D::xy(1, 0));
         }
@@ -504,13 +656,12 @@ impl TetrisBoard {
             self.lock_delay_countdown -= 1;
         }
 
-
         let mut move_down_success = true;
 
         // Move piece down if gravity countdown is done.
         if self.gravity_countdown == 0 || self.locking_state {
             self.gravity_countdown = self.gravity;
-            move_down_success = self.move_active_piece(Pos2D::xy(0,1));
+            move_down_success = self.move_active_piece(Pos2D::xy(0, 1));
 
             // Reset lock delay if piece moved down.
             if move_down_success {
@@ -523,7 +674,10 @@ impl TetrisBoard {
         }
 
         if self.locking_state && self.lock_delay_countdown == 0 {
-            let piece_to_consume = mem::replace(&mut self.active_piece, self.tetris_gen.get_next_piece(start_pos));
+            let piece_to_consume = mem::replace(
+                &mut self.active_piece,
+                self.tetris_gen.get_next_piece(start_pos),
+            );
             self.consume(piece_to_consume);
             self.clear_lines();
 
@@ -539,57 +693,66 @@ impl TetrisBoard {
         if (self.level >= 10) {
             self.level = 10;
         }
-
     }
 }
 
 impl Drawable for TetrisUnitBlock {
-    fn draw<T:RenderTarget>(&self, canvas: &mut Canvas<T>, pos:Pos2D) {
+    fn draw<T: RenderTarget>(&self, canvas: &mut Canvas<T>, pos: Pos2D) {
         let box_width = 20;
         canvas.set_draw_color(self.color);
         let rect = Rect::new(
-                pos.x + 1,  
-                pos.y + 1, 
-                box_width - 2 as u32, 
-                box_width - 2 as u32
+            pos.x + 1,
+            pos.y + 1,
+            box_width - 2 as u32,
+            box_width - 2 as u32,
         );
         canvas.fill_rect(rect);
     }
 }
 
 impl Drawable for TetrisBoard {
-    fn draw<T:RenderTarget>(&self, canvas: &mut Canvas<T>, pos:Pos2D) {
+    fn draw<T: RenderTarget>(&self, canvas: &mut Canvas<T>, pos: Pos2D) {
         let box_width: i32 = 20;
         for i in 0usize..self.board.len() {
             for j in 0usize..self.board[i].len() {
-                let x:i32 = (j as i32) * box_width + pos.x;
-                let y:i32 = (i as i32) * box_width + pos.y;
+                let x: i32 = (j as i32) * box_width + pos.x;
+                let y: i32 = (i as i32) * box_width + pos.y;
                 self.board[i][j].draw(canvas, Pos2D::xy(x, y))
             }
         }
 
         let x = self.active_piece.pos.x * box_width + pos.x;
         let y = self.active_piece.pos.y * box_width + pos.y;
-        self.active_piece.draw(canvas, Pos2D::xy(x,y));
+        self.active_piece.draw(canvas, Pos2D::xy(x, y));
     }
 }
 
-fn draw_text<T:RenderTarget, F>(
-    canvas: &mut Canvas<T>, 
-    texture_creator: & TextureCreator<F>, 
-    pos:Pos2D, 
-    text: &str, 
-    font: &Font, 
+fn draw_text<T: RenderTarget, F>(
+    canvas: &mut Canvas<T>,
+    texture_creator: &TextureCreator<F>,
+    pos: Pos2D,
+    text: &str,
+    font: &Font,
     scale_down: u32,
     color: Color,
-    ) {
+) {
     let surface = font.render(text).blended(color).unwrap();
-    let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
-    let TextureQuery { width: text_width, height: text_height, .. } = texture.query();
-    let rect = Rect::new(pos.x, pos.y, text_width/scale_down, text_height/scale_down);
+    let texture = texture_creator
+        .create_texture_from_surface(&surface)
+        .unwrap();
+    let TextureQuery {
+        width: text_width,
+        height: text_height,
+        ..
+    } = texture.query();
+    let rect = Rect::new(
+        pos.x,
+        pos.y,
+        text_width / scale_down,
+        text_height / scale_down,
+    );
     canvas.copy(&texture, None, Some(rect)).unwrap();
 }
-
 
 fn main() {
     let width = 800;
@@ -599,7 +762,8 @@ fn main() {
     let video_subsystem = sdl_context.video().unwrap();
     let ttf_context = sdl2::ttf::init().unwrap();
 
-    let window = video_subsystem.window("Rust Tetris", width, height)
+    let window = video_subsystem
+        .window("Rust Tetris", width, height)
         .position_centered()
         .opengl()
         .build()
@@ -609,44 +773,55 @@ fn main() {
     let texture_creator = canvas.texture_creator();
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    let font_path: &Path = Path::new("res/fonts/kenney_future.ttf"); 
+    let font_path: &Path = Path::new("res/fonts/kenney_future.ttf");
     let mut font = ttf_context.load_font(font_path, 28).unwrap();
 
     let mut tetris_board = TetrisBoard::new();
     let mut last_updated = Instant::now();
 
-
-    let mut input : Input = Input {
-            left_key_pressed: false,
-            right_key_pressed: false,
-            up_key_pressed: false,
-            down_key_pressed: false,
+    let mut input: Input = Input {
+        left_key_pressed: false,
+        right_key_pressed: false,
+        up_key_pressed: false,
+        down_key_pressed: false,
     };
 
     'running: loop {
-
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit {..} | Event::KeyDown {keycode: Some(Keycode::Escape), ..} => {
-                    break 'running
-                }
-                Event::KeyDown {keycode: Some(Keycode::Left), ..}  => {
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => break 'running,
+                Event::KeyDown {
+                    keycode: Some(Keycode::Left),
+                    ..
+                } => {
                     input.left_key_pressed = true;
                 }
-                Event::KeyDown {keycode: Some(Keycode::Right), ..}  => {
+                Event::KeyDown {
+                    keycode: Some(Keycode::Right),
+                    ..
+                } => {
                     input.right_key_pressed = true;
                 }
-                Event::KeyDown {keycode: Some(Keycode::Up), ..}  => {
+                Event::KeyDown {
+                    keycode: Some(Keycode::Up),
+                    ..
+                } => {
                     input.up_key_pressed = true;
                 }
                 _ => {}
             }
         }
 
-        if (event_pump.keyboard_state().is_scancode_pressed(Scancode::Down)) {
+        if (event_pump
+            .keyboard_state()
+            .is_scancode_pressed(Scancode::Down))
+        {
             input.down_key_pressed = true;
-        }
-        else {
+        } else {
             input.down_key_pressed = false;
         }
 
@@ -657,25 +832,88 @@ fn main() {
             input.reset();
             last_updated = current_time;
 
-            canvas.set_draw_color(Color::RGB(0,0,0));
-            canvas.fill_rect(Rect::new(0,0,width,height));
+            canvas.set_draw_color(Color::RGB(0, 0, 0));
+            canvas.fill_rect(Rect::new(0, 0, width, height));
 
-            tetris_board.draw(&mut canvas, Pos2D::xy(250,50));
+            tetris_board.draw(&mut canvas, Pos2D::xy(250, 50));
 
-            draw_text(&mut canvas, &texture_creator, Pos2D::xy(50,10), &format!("Left, Right to move " ), &font, 3, Color::RGB(255,255,255));
-            draw_text(&mut canvas, &texture_creator, Pos2D::xy(50,20), &format!("Up to rotate" ), &font, 3, Color::RGB(255,255,255));
-            draw_text(&mut canvas, &texture_creator, Pos2D::xy(50,30), &format!("Down to drop" ), &font, 3, Color::RGB(255,255,255));
-            draw_text(&mut canvas, &texture_creator, Pos2D::xy(500,10), &format!("Lines : {}", tetris_board.lines_cleared), &font, 1, Color::RGB(255,255,255));
-            draw_text(&mut canvas, &texture_creator, Pos2D::xy(500,40), &format!("Level : {}", tetris_board.level), &font, 1, Color::RGB(255,255,255));
-            draw_text(&mut canvas, &texture_creator, Pos2D::xy(300,10), "Tetris", &font, 1, Color::RGB(255,255,255));
+            draw_text(
+                &mut canvas,
+                &texture_creator,
+                Pos2D::xy(50, 10),
+                &format!("Left, Right to move "),
+                &font,
+                3,
+                Color::RGB(255, 255, 255),
+            );
+            draw_text(
+                &mut canvas,
+                &texture_creator,
+                Pos2D::xy(50, 20),
+                &format!("Up to rotate"),
+                &font,
+                3,
+                Color::RGB(255, 255, 255),
+            );
+            draw_text(
+                &mut canvas,
+                &texture_creator,
+                Pos2D::xy(50, 30),
+                &format!("Down to drop"),
+                &font,
+                3,
+                Color::RGB(255, 255, 255),
+            );
+            draw_text(
+                &mut canvas,
+                &texture_creator,
+                Pos2D::xy(500, 10),
+                &format!("Lines : {}", tetris_board.lines_cleared),
+                &font,
+                1,
+                Color::RGB(255, 255, 255),
+            );
+            draw_text(
+                &mut canvas,
+                &texture_creator,
+                Pos2D::xy(500, 40),
+                &format!("Level : {}", tetris_board.level),
+                &font,
+                1,
+                Color::RGB(255, 255, 255),
+            );
+            draw_text(
+                &mut canvas,
+                &texture_creator,
+                Pos2D::xy(300, 10),
+                "Tetris",
+                &font,
+                1,
+                Color::RGB(255, 255, 255),
+            );
 
             if tetris_board.is_game_over {
-                draw_text(&mut canvas, &texture_creator, Pos2D::xy(280,300), "GAME OVER!", &font, 1, Color::RGB(255, 0, 0));
-                draw_text(&mut canvas, &texture_creator, Pos2D::xy(140,340), "Press UP arrow key to restart", &font, 1, Color::RGB(128, 0, 0));
+                draw_text(
+                    &mut canvas,
+                    &texture_creator,
+                    Pos2D::xy(280, 300),
+                    "GAME OVER!",
+                    &font,
+                    1,
+                    Color::RGB(255, 0, 0),
+                );
+                draw_text(
+                    &mut canvas,
+                    &texture_creator,
+                    Pos2D::xy(140, 340),
+                    "Press UP arrow key to restart",
+                    &font,
+                    1,
+                    Color::RGB(128, 0, 0),
+                );
             }
 
             canvas.present();
         }
-
     }
 }
